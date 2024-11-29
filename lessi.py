@@ -36,5 +36,5 @@ for c in hex_colors:
 
 
 for c in sorted(colors, key=lambda x: x['hsv'][2]):
-    print('<div style="background-color: ' + str(c['hex']) + '">#' + str(c['hex']) + '</div>')
+    print('<div style="background-color: #' + str(c['hex']) + '">#' + str(c['hex']) + '</div>')
 
