@@ -123,6 +123,7 @@ hex_colors = [
 hex_colors='edd2e0-edbbb4-dbabbe-baa1a7-797b84'
 hex_colors='85afda-f0e6ac-c5afe4-b1f8d7-9df9ef-76d7eb-6ecdc8-b4ac85-ffd7f1-bedeff-c8fffb-ffddcc-8fb49f-86b2bf-b6a6b7-ebfaff'
 hex_colors='b0ab00-00664e-b3d097'
+hex_colors='9bc1b7-d1ffc0-6ae9ff-b3ad79'
 
 l = lessi(hex_colors, 'test.jpg', 'out.gif')
 
