@@ -6,9 +6,9 @@ Reduce pictures to a specified color palette.
 
 The following:
 
-'''
+```
 $ lessi -p '#A42864 #CE3661 #D9636D #E49990 #EFCCBD #FAF2EA #222222' -s -m 80 -o example.gif photo.jpg
-'''
+```
 
 .. converts this:
 
