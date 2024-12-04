@@ -6,18 +6,80 @@ from sys import exit
 import argparse
 from os.path import isfile
 from re import split
+from copy import deepcopy
+from numpy import asarray
+from potrace import Bitmap, POTRACE_TURNPOLICY_MINORITY, POTRACE_TURNPOLICY_MAJORITY, POTRACE_TURNPOLICY_BLACK, POTRACE_TURNPOLICY_WHITE
+
 
 class lessi:
     """
-    Reduce an image colors to specified palette and convert to GIF
+    Reduce an image colors to specified palette and convert to svg
     """
 
-    def __new__(self, hex_colors, image_src, mode_filter_size=None, sort_palette=False):
+    def traces_to_svg(self, traces, width, height, background_color=None):
+        svg = f'''<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="{width}" height="{height}" viewBox="0 0 {width} {height}">'''
+
+        if background_color:
+            svg += f'<rect width="100%" height="100%" fill="#{background_color}" />'
+
+        for trace in traces:
+            svg += self.trace_to_svg_part(self, trace['trace'], trace['hex_color'])
+
+        svg += "</svg>"
+
+        return svg
+
+
+    def trace_to_svg_part(self, trace, fill_color):
+        parts = []
+        for curve in trace:
+            fs = curve.start_point
+            parts.append(f"M{fs.x},{fs.y}")
+            for segment in curve.segments:
+                if segment.is_corner:
+                    a = segment.c
+                    b = segment.end_point
+                    parts.append(f"L{a.x},{a.y}L{b.x},{b.y}")
+                else:
+                    a = segment.c1
+                    b = segment.c2
+                    c = segment.end_point
+                    parts.append(f"C{a.x},{a.y} {b.x},{b.y} {c.x},{c.y}")
+            parts.append("z")
+
+        return f'<path stroke="none" fill="#{fill_color}" fill-rule="evenodd" d="{"".join(parts)}"/>'
+
+
+    def filter_by_color(self, color, image):
+        """
+        Return image where all colors except color are white and color is black
+        """
+
+        old_palette = image.getpalette()
+        new_palette = []
+        for i in range(0, len(old_palette), 3):
+            if old_palette[i] == color[0] and old_palette[i+1] == color[1] and old_palette[i+2] == color[2]:
+                new_palette.append(0)
+                new_palette.append(0)
+                new_palette.append(0)
+            else:
+                new_palette.append(255)
+                new_palette.append(255)
+                new_palette.append(255)
+
+        try:
+            new_image = deepcopy(image)
+            new_image.putpalette(new_palette)
+        except Exception as e:
+            print(str(e))
+
+        return new_image
+
+
+    def __new__(self, hex_colors, image_src, turd_size=0, sort_palette=False, mode_filter_size=None):
         self.colors = []
         tmp_colors = []
         grayscale_colors = []
-        new_palette = []
-
 
         for c in hex_colors:
             r, g, b = self.hex2rgb(self, c)
@@ -40,48 +102,68 @@ class lessi:
             raise Exception('Unable to open image: ' + image_src + ': ' + e)
 
         try:
-            img_gs = ImageOps.grayscale(img)
+            img = ImageOps.grayscale(img)
         except Exception as e:
             raise Exception('Unable to convert image to grayscale: ' + image_src + ': ' + e)
 
 
         # Reduce palette to number of color argument
         try:
-            img_reduced = img_gs.convert('P', palette=Image.ADAPTIVE, colors=len(hex_colors))
+            img = img.convert('P', palette=Image.ADAPTIVE, colors=len(hex_colors))
         except Exception as e:
             raise Exception('Unable to reduce palette: ' + image_src + ': ' + e)
 
 
+        # Despecle image
+        if mode_filter_size == None:
+            w, h = img.size
+            mode_filter_size = int(w * h * 0.00001)
+
+        img = img.filter(ImageFilter.ModeFilter(size=mode_filter_size))
+
+
         # For each supplied color match to corresponding grayscale color
-        grayscale_colors = img_reduced.getpalette()[:len(hex_colors) * 3]
+        grayscale_colors = img.getpalette()[:len(hex_colors) * 3]
         colors_index = 0
         for i in range(0, len(hex_colors) * 3, 3):
-            #self.colors[colors_index]['grayscale_hex'] = '%02x%02x%02x' % (grayscale_colors[i], grayscale_colors[i+1], grayscale_colors[i+2])
+            self.colors[colors_index]['grayscale_hex'] = '%02x%02x%02x' % (grayscale_colors[i], grayscale_colors[i+1], grayscale_colors[i+2])
             self.colors[colors_index]['grayscale_rgb'] = (grayscale_colors[i], grayscale_colors[i+1], grayscale_colors[i+2])
             colors_index += 1
 
-        gs_palette = img_reduced.getpalette()
+        gs_palette = img.getpalette()
+
+        layers_bitmap = []
+        layers_trace = []
 
         # Replace image grayscale colors with supplied palette
         for n in range(0, len(self.colors) * 3, 3):
             for i in range(0, len(self.colors)):
                 if gs_palette[n] == self.colors[i]['grayscale_rgb'][0] and gs_palette[n+1] == self.colors[i]['grayscale_rgb'][1] and gs_palette[n+2] == self.colors[i]['grayscale_rgb'][2]:
-                    new_palette.append(self.colors[i]['rgb'][0])
-                    new_palette.append(self.colors[i]['rgb'][1])
-                    new_palette.append(self.colors[i]['rgb'][2])
+
+                    layers_bitmap.append({
+                        'hex_color': self.colors[i]['hex'],
+                        'bitmap': self.filter_by_color(self, self.colors[i]['grayscale_rgb'], img)
+                    })
+
                     break
 
-        new_palette = new_palette + gs_palette[len(new_palette):]
+        # Trace bitmap layers as paths
+        for l in layers_bitmap:
+            bitmap = Bitmap(l['bitmap'])
+            layers_trace.append({
+                'hex_color': l['hex_color'],
+                'trace': bitmap.trace(
+                    turdsize=turd_size,
+                    turnpolicy=POTRACE_TURNPOLICY_BLACK,
+                    alphamax=1.3334,
+                    #opticurve=1,
+                    #opttolerance=9,
+                )
+            })
 
-        img_reduced.putpalette(new_palette)
+        svg = self.traces_to_svg(self, layers_trace, img.size[0], img.size[1], background_color=self.colors[-1]['hex'])
 
-        if mode_filter_size == None:
-            w, h = img_reduced.size
-            mode_filter_size = int(w * h * 0.00001)
-
-        img_filtered = img_reduced.filter(ImageFilter.ModeFilter(size=mode_filter_size))
-
-        return img_filtered
+        return svg
 
 
     def hex2rgb(self, hex_color):
@@ -100,26 +182,27 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser()
 
     p.add_argument('--mode-filter-size', '-m', action='store', type=int, help='Replace the pixel value with the median value of all pixels within the given size')
-    p.add_argument('--hex-palette', '-p', action='store', type=str, help='Hex color codes separated by space, comma or dash', required=True)
+    p.add_argument('-turd-size', '-t', action='store', type=int, help='Despeckle the bitmap to be traced, by removing all curves whose enclosed area is below the given threshold', default=0)
+    p.add_argument('--hex-palette', '-p', action='store', type=str, help='Hex color codes separated by space or dash', required=True)
     p.add_argument('--output', '-o', action='store', type=str, help='Output file path', required=True)
     p.add_argument('--sort-palette', '-s', action='store_true', help='Sort palette dark to light')
     p.add_argument('file', nargs=argparse.PARSER)
     a = p.parse_args()
 
-    hex_colors = split('\W+', a.hex_palette)
+    hex_colors = a.hex_palette.replace('#', '')
+    hex_colors = hex_colors.lower()
+    hex_colors = hex_colors.replace('-', ' ')
+    hex_colors = split(' ', hex_colors)
 
     try:
-        l = lessi(hex_colors, a.file[0], mode_filter_size=a.mode_filter_size, sort_palette=a.sort_palette)
+        svg = lessi(hex_colors, a.file[0], mode_filter_size=a.mode_filter_size, turd_size=a.turd_size, sort_palette=a.sort_palette)
     except Exception as e:
         print('Image processing failed: ' + str(e))
         exit(1)
 
-    if not a.output.lower().endswith('.gif'):
-        print('Output must be a .gif')
-        exit(1)
-
     try:
-        l.save(a.output, comment='https://github.com/oliverfields/lessi')
+        with open(f"{a.output}", "w") as fp:
+            fp.write(svg)
     except Exception as e:
         print('Unable to save: ' + a.output + ': ' + e)
         exit(1)

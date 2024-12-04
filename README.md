@@ -7,7 +7,7 @@ Reduce pictures to a specified color palette.
 The following:
 
 ```
-$ lessi -p '#A42864 #CE3661 #D9636D #E49990 #EFCCBD #FAF2EA #222222' -s -m 80 -o example.gif photo.jpg
+$ lessi -p '#A42864 #CE3661 #D9636D #E49990 #EFCCBD #FAF2EA #222222' -s -m 80 -o example.svg photo.jpg
 ```
 
 .. converts this:
@@ -16,4 +16,4 @@ $ lessi -p '#A42864 #CE3661 #D9636D #E49990 #EFCCBD #FAF2EA #222222' -s -m 80 -o
 
 .. into this:
 
-![Wow](https://github.com/oliverfields/lessi/blob/main/example.gif?raw=true)
+![Wow](https://github.com/oliverfields/lessi/blob/main/example.svg?raw=true)
