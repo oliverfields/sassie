@@ -2,28 +2,96 @@
 
 from colorsys import rgb_to_hls
 from PIL import Image, ImageOps, ImageFilter
-from sys import exit
+from sys import exit, argv
 import argparse
-from os.path import isfile
 from re import split
 from copy import deepcopy
-from numpy import asarray
 from potrace import Bitmap, POTRACE_TURNPOLICY_MINORITY, POTRACE_TURNPOLICY_MAJORITY, POTRACE_TURNPOLICY_BLACK, POTRACE_TURNPOLICY_WHITE
+from base64 import b64encode
 
 
-class lessi:
+class sassie:
     """
-    Reduce an image colors to specified palette and convert to svg
+    Reduce image colors palette to specified palette and convert to svg
     """
 
-    def traces_to_svg(self, traces, width, height, background_color=None):
+    def traces_to_svg(self, traces, width, height, background_color=None, textbox=None):
         svg = f'''<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="{width}" height="{height}" viewBox="0 0 {width} {height}">'''
+
+        svg += '<!-- Generated using https://github.com/oliverfields/sassie -->'
+
+        if textbox:
+
+            try:
+                with open(textbox['font'], "rb") as f:
+                    font64 = b64encode(f.read())
+                    svg += '<defs><style>@font-face { font-family: "' + textbox['font-face'] + '"; src: url(data:application/font-truetype;charset=utf-8;base64,' + font64.decode('utf-8') + ') format("truetype"); font-weight: normal; font-style: normal; }</style></defs>'
+            except Exception as e:
+                print('Unable to process font: ' + str(e))
+                raise
 
         if background_color:
             svg += f'<rect width="100%" height="100%" fill="#{background_color}" />'
 
         for trace in traces:
             svg += self.trace_to_svg_part(self, trace['trace'], trace['hex_color'])
+
+        if textbox:
+            try:
+                text = textbox['text'].split('\n')
+                text_line_count = len(text)
+            except Exception as e:
+                text = []
+                text_line_count = 0
+                print(str(e))
+                raise
+
+            try:
+                stroke = textbox['stroke'].lstrip('#')
+            except:
+                stroke = f'{self.colors[-1]["hex"]}'
+
+            try:
+                stroke_width = textbox['stroke-width']
+            except:
+                stroke_width = 1
+
+            try:
+                fill = textbox['fill'].lstrip('#')
+            except:
+                fill = f'{self.colors[0]["hex"]}'
+
+            try:
+                font_size = textbox['font-size']
+            except:
+                font_size = 32
+
+            try:
+                x = textbox['x']
+            except:
+                x = int(width / 2)
+
+            try:
+                y = textbox['y']
+            except:
+                y = int(height / 2)
+
+                if text_line_count > 0:
+                    y = y - ((text_line_count * font_size) / text_line_count)
+
+            try:
+                font_family = f' font-family="{textbox["font-face"]}"'
+            except:
+                font_family = ''
+
+            text_x = x
+            text_y = y
+            for t in text:
+                svg += f'<g stroke="#{stroke}" fill="#{fill}" stroke-width="{stroke_width}"><text font-size="{font_size}"{font_family} x="{text_x}" y="{text_y}"  dominant-baseline="middle" text-anchor="middle">'
+                svg += t
+                svg += '</text></g>'
+                #text_x += font_size
+                text_y += font_size
 
         svg += "</svg>"
 
@@ -76,7 +144,7 @@ class lessi:
         return new_image
 
 
-    def __new__(self, hex_colors, image_src, turd_size=0, sort_palette=False, mode_filter_size=None):
+    def __new__(self, hex_colors, image_src, turd_size=0, sort_palette=False, mode_filter_size=None, textbox=None, width=None, height=None):
         self.colors = []
         tmp_colors = []
         grayscale_colors = []
@@ -161,7 +229,13 @@ class lessi:
                 )
             })
 
-        svg = self.traces_to_svg(self, layers_trace, img.size[0], img.size[1], background_color=self.colors[-1]['hex'])
+        if not width:
+            width = img.size[0]
+
+        if not height:
+            height = img.size[1]
+
+        svg = self.traces_to_svg(self, layers_trace, width, height, background_color=self.colors[-1]['hex'], textbox=textbox)
 
         return svg
 
@@ -182,9 +256,13 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser()
 
     p.add_argument('--mode-filter-size', '-m', action='store', type=int, help='Replace the pixel value with the median value of all pixels within the given size')
-    p.add_argument('-turd-size', '-t', action='store', type=int, help='Despeckle the bitmap to be traced, by removing all curves whose enclosed area is below the given threshold', default=0)
+    p.add_argument('--width', '-w', action='store', type=int, help='SVG width')
+    p.add_argument('--height', '-e', action='store', type=int, help='SVG height')
+    p.add_argument('-turd-size', '-d', action='store', type=int, help='Despeckle the bitmap to be traced, by removing all curves whose enclosed area is below the given threshold', default=0)
     p.add_argument('--hex-palette', '-p', action='store', type=str, help='Hex color codes separated by space or dash', required=True)
     p.add_argument('--output', '-o', action='store', type=str, help='Output file path', required=True)
+    p.add_argument('--font', '-f', action='store', type=str, help='Embed truetype(ttf) font')
+    p.add_argument('--textbox', '-t', action='store', type=str, help='text box settings (JSON)', default=None)
     p.add_argument('--sort-palette', '-s', action='store_true', help='Sort palette dark to light')
     p.add_argument('file', nargs=argparse.PARSER)
     a = p.parse_args()
@@ -194,8 +272,27 @@ if __name__ == "__main__":
     hex_colors = hex_colors.replace('-', ' ')
     hex_colors = split(' ', hex_colors)
 
+    # Example textbox settings
+    #textbox = {
+    #    'text': 'Two in times\nof peace',
+    #    'fill': 'red',
+    #    'stroke': 'white',
+    #    'font-size': 60,
+    #    'font': '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+    #    'font-family': 'DejaVuSans',
+    #    'x': 210,
+    #    'y': 100
+    #}
+
     try:
-        svg = lessi(hex_colors, a.file[0], mode_filter_size=a.mode_filter_size, turd_size=a.turd_size, sort_palette=a.sort_palette)
+        if a.textbox:
+            textbox = eval(a.textbox)
+    except Exception as e:
+        print('Unable to parse textbox setting string')
+        exit(1)
+
+    try:
+        svg = sassie(hex_colors, a.file[0], mode_filter_size=a.mode_filter_size, sort_palette=a.sort_palette, textbox=textbox, height=a.height, width=a.width)
     except Exception as e:
         print('Image processing failed: ' + str(e))
         exit(1)
