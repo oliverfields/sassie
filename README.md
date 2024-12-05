@@ -24,7 +24,7 @@ $ sassie -p '#A42864 #CE3661 #D9636D #E49990 #EFCCBD #FAF2EA #222222' -s -m 80 -
 This command converts the image, adds text and embeds the font in the svg ..
 
 ```
-$ sassie --sort-palette --output smoke.svg --hex-palette '325912 9FC332 E0DD9F 000000 00ff00' --text '{"text": "Smoking kills", "font": "antropos-freefont.ttf", "font-face": "antropos", "stroke-width": 2, "font-size": 50, "y": 69 }' --mode-filter-size 9 smoke.jpg
+$ sassie --sort-palette --output smoke.svg --hex-palette '325912 9FC332 E0DD9F 000000 00ff00' --textbox '{"text": "Smoking kills", "font": "antropos-freefont.ttf", "font-face": "antropos", "stroke-width": 2, "font-size": 50, "y": 69 }' --mode-filter-size 9 smoke.jpg
 ```
 
 .. converting this .jpg ..
@@ -35,7 +35,7 @@ $ sassie --sort-palette --output smoke.svg --hex-palette '325912 9FC332 E0DD9F 0
 
 ![SVG](https://github.com/oliverfields/lessi/blob/main/smoke.svg?raw=true)
 
-The **--text** settings. Only **text** is required.
+The **--textbox** settings, only **text** is required.
 
 ```
 {
