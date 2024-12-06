@@ -44,7 +44,6 @@ The **--textbox** settings, only **text** is required.
   'stroke': 'white',
   'font-size': 60,
   'font': '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-  'font-family': 'DejaVuSans',
   'x': 210,
   'y': 100
 }

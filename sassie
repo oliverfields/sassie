@@ -16,6 +16,9 @@ class sassie:
     """
 
     def traces_to_svg(self, traces, width, height, background_color=None, textbox=None):
+
+        font_name = False
+
         svg = f'''<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="{width}" height="{height}" viewBox="0 0 {width} {height}">'''
 
         svg += '<!-- Generated using https://github.com/oliverfields/sassie -->'
@@ -25,7 +28,8 @@ class sassie:
             try:
                 with open(textbox['font'], "rb") as f:
                     font64 = b64encode(f.read())
-                    svg += '<defs><style>@font-face { font-family: "' + textbox['font-face'] + '"; src: url(data:application/font-truetype;charset=utf-8;base64,' + font64.decode('utf-8') + ') format("truetype"); font-weight: normal; font-style: normal; }</style></defs>'
+                    font_name = 'font1'
+                    svg += '<defs><style>@font-face { font-family: "' + font_name + '"; src: url(data:application/font-truetype;charset=utf-8;base64,' + font64.decode('utf-8') + ') format("truetype"); font-weight: normal; font-style: normal; }</style></defs>'
             except Exception as e:
                 print('Unable to process font: ' + str(e))
                 raise
@@ -79,9 +83,9 @@ class sassie:
                 if text_line_count > 0:
                     y = y - ((text_line_count * font_size) / text_line_count)
 
-            try:
-                font_family = f' font-family="{textbox["font-face"]}"'
-            except:
+            if font_name:
+                font_family = f' font-family="{font_name}"'
+            else:
                 font_family = ''
 
             text_x = x
@@ -279,7 +283,6 @@ if __name__ == "__main__":
     #    'stroke': 'white',
     #    'font-size': 60,
     #    'font': '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-    #    'font-family': 'DejaVuSans',
     #    'x': 210,
     #    'y': 100
     #}
