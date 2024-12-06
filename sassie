@@ -71,31 +71,99 @@ class sassie:
                 font_size = 32
 
             try:
+                margin = textbox['margin']
+            except:
+                margin = 0
+
+            text_anchor = 'middle'
+            text_baseline = 'middle'
+            text_height = text_line_count * font_size
+
+            try:
+                gravity = textbox['gravity']
+
+
+                if gravity == 'n':
+                    y = font_size + margin
+                    text_baseline = 'ideographic'
+                elif gravity == 'ne':
+                    y = font_size + margin
+                    text_anchor = 'end'
+                    text_baseline = 'ideographic'
+                    x = width - margin
+                elif gravity == 'e':
+                    text_anchor = 'end'
+                    text_baseline = 'middle'
+                    x = width - margin
+                    y = int(height / 2) - int(text_height / 2) + int(font_size / 2)
+                elif gravity == 'se':
+                    text_anchor = 'end'
+                    text_baseline = 'after-edge'
+                    x = width - margin
+                    y = height - (text_height + margin) + font_size
+                elif gravity == 's':
+                    text_anchor = 'middle'
+                    text_baseline = 'after-edge'
+                    y = height - (text_height + margin) + font_size
+                elif gravity == 'sw':
+                    text_anchor = 'start'
+                    text_baseline = 'after-edge'
+                    x = margin
+                    y = height - (text_height + margin) + font_size
+                elif gravity == 'w':
+                    text_anchor = 'start'
+                    text_baseline = 'middle'
+                    x = margin
+                    y = int(height / 2) - int(text_height / 2) + int(font_size / 2)
+                elif gravity == 'nw':
+                    y = font_size + margin
+                    text_anchor = 'start'
+                    text_baseline = 'ideographic'
+                    x = margin
+                else:
+                    print(f"Textbox gravity value '{gravity}' unknown, must be either n, ne, e, se, s, sw, w or nw")
+                    raise
+
+                #print(f'gravity: {gravity} x: {x} y: {y}')
+                print(f'width: {width} height: {height} text_height: {text_height}')
+
+            except:
+                pass
+
+            try:
                 x = textbox['x']
             except:
-                x = int(width / 2)
+                if 'x' not in vars():
+                    x = int(width / 2)
 
             try:
                 y = textbox['y']
             except:
-                y = int(height / 2)
-
-                if text_line_count > 0:
-                    y = y - ((text_line_count * font_size) / text_line_count)
+                if 'y' not in vars():
+                    y = int(height / 2)
 
             if font_name:
                 font_family = f' font-family="{font_name}"'
             else:
                 font_family = ''
 
-            text_x = x
-            text_y = y
+            if len(text) > 1:
+                text_baseline = 'hanging'
+                text_y = y - int(text_height / 2)
+            else:
+                text_y = y
+
+            line_count = 0
+            line_y = text_y
             for t in text:
-                svg += f'<g stroke="#{stroke}" fill="#{fill}" stroke-width="{stroke_width}"><text font-size="{font_size}"{font_family} x="{text_x}" y="{text_y}"  dominant-baseline="middle" text-anchor="middle">'
+                svg += f'<g stroke="#{stroke}" fill="#{fill}" stroke-width="{stroke_width}"><text font-size="{font_size}"{font_family} x="{x}" y="{line_y}" dominant-baseline="{text_baseline}" text-anchor="{text_anchor}">'
                 svg += t
                 svg += '</text></g>'
-                #text_x += font_size
-                text_y += font_size
+                line_count += 1
+                line_y = text_y + (line_count * font_size)
+
+        #svg += '<line x1="50%" y1="0" x2="50%" y2="100%" style="stroke:blue;stroke-width:1" />'
+        #svg += '<line x1="0" y1="50%" x2="100%" y2="50%" style="stroke:blue;stroke-width:1" />'
 
         svg += "</svg>"
 

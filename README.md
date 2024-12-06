@@ -39,13 +39,15 @@ The **--textbox** settings, only **text** is required.
 
 ```
 {
-  'text': 'Line one\nLine two',
-  'fill': 'red',
-  'stroke': 'white',
-  'font-size': 60,
+  'text': 'Line one\nLine two', # \n adds line breaks
+  'fill': 'red', # Name or hex
+  'stroke': 'white', # Name or hex
+  'font-size': 60, # In pixels
   'font': '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-  'x': 210,
-  'y': 100
+  'x': 210, # Absolute x position
+  'y': 100, # Absolute y position
+  'gravity': 'se', # Can be either n, ne, e, se, s, sw, w or nw, if not set center text vertically and horizontaly
+  'margin': 10, # Pixel space around text
 }
 ```
 
