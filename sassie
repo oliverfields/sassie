@@ -23,6 +23,8 @@ class sassie:
 
         svg += '<!-- Generated using https://github.com/oliverfields/sassie -->'
 
+        svg += f'<!-- Arguments: {" ".join(argv[1:])}  -->'
+
         if textbox:
 
             try:
@@ -363,7 +365,6 @@ if __name__ == "__main__":
     #    'x': 210,
     #    'y': 100
     #}
-
 
     try:
         if a.textbox:
