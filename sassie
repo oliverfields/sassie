@@ -241,6 +241,14 @@ class sassie:
         except Exception as e:
             raise Exception('Unable to open image: ' + image_src + ': ' + e)
 
+        if img.width > 1920 or img.height > 1920:
+            if input(f'Image is large ({img.width}x{img.height}), do you want to reduce the size to speed things up? [Y|n] ') != 'n':
+                small_width = 1920
+                wpercent = (small_width / float(img.size[0]))
+                small_height = int((float(img.size[1]) * float(wpercent)))
+                print(f'Resizing to {small_width}x{small_height}')
+                img.thumbnail((small_width, small_height), Image.Resampling.LANCZOS)
+
         try:
             img = ImageOps.grayscale(img)
         except Exception as e:
