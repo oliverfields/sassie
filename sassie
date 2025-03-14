@@ -325,6 +325,7 @@ class sassie:
 
 if __name__ == "__main__":
 
+    textbox = None
     p = argparse.ArgumentParser()
 
     p.add_argument('-m', '--mode-filter-size', action='store', type=int, help='Replace the pixel value with the median value of all pixels within the given size')
@@ -354,6 +355,7 @@ if __name__ == "__main__":
     #    'x': 210,
     #    'y': 100
     #}
+
 
     try:
         if a.textbox:
