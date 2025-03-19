@@ -251,9 +251,10 @@ class sassie:
 
         if resize:
             if img.width > 1920 or img.height > 1920:
+
                 small_width = 1920
-                wpercent = (small_width / float(img.size[0]))
-                small_height = int((float(img.size[1]) * float(wpercent)))
+                wpercent = (small_width / float(img.width))
+                small_height = int((float(img.height) * float(wpercent)))
                 print(f'Resizing to {small_width}x{small_height}. Use -n or --no-resize to disable this behaviour')
                 img.thumbnail((small_width, small_height), Image.Resampling.LANCZOS)
 
@@ -272,7 +273,7 @@ class sassie:
                 elif exif[orientation] == 8:
                     img = img.rotate(90, expand=True)
 
-            except (AttributeError, KeyError, IndexError):
+            except (TypeError, AttributeError, KeyError, IndexError):
                 # cases: image don't have getexif
                 pass
 
