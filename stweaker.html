@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SVG Modifier with HSL Sliders</title>
+  <style>
+    /* Basic Layout */
+    body {
+      display: flex;
+      height: 100vh;
+      margin: 0;
+      font-family: Arial, sans-serif;
+    }
+
+    /* Left menu */
+    #menu {
+      width: 344px;
+      background-color: #f4f4f4;
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    #menu h1 {
+      font-size: 1.2em;
+      margin-bottom: 20px;
+    }
+
+    /* SVG container */
+    #svgContainer {
+      flex-grow: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+      background-color: #eaeaea;
+    }
+
+    /* Sliders */
+    .slider-container {
+      margin: 0 0 30px 0;
+    }
+
+    .slider {
+      width: 200px;
+    }
+
+    /* Button Styling */
+    .button {
+      padding: 10px 20px;
+      background-color: #007BFF;
+      color: white;
+      border: none;
+      cursor: pointer;
+      margin-top: 10px;
+      border-radius: 5px;
+    }
+
+    .button:hover {
+      background-color: #0056b3;
+    }
+
+    /* Color circle styling */
+    .color-circle {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-left: 10px;
+    }
+
+    /* Heading and sliders layout */
+    .slider-heading-container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .slider-heading {
+      margin: 0;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Left Menu -->
+  <div id="menu">
+    <h1>SVG Controls</h1>
+
+    <!-- File Input -->
+    <input type="file" id="fileInput" accept=".svg"><br><br>
+
+    <!-- Container for HSL sliders -->
+    <div id="colorInputsContainer"></div>
+
+    <!-- Copy to Clipboard Button -->
+    <button class="button" id="copyButton" disabled>Copy SVG to Clipboard</button>
+  </div>
+
+  <!-- SVG Container -->
+  <div id="svgContainer"></div>
+
+  <script>
+    // Function to convert hex to RGB
+    function hexToRgb(hex) {
+      let r = 0, g = 0, b = 0;
+
+      // 3 digits
+      if (hex.length === 4) {
+        r = parseInt(hex[1] + hex[1], 16);
+        g = parseInt(hex[2] + hex[2], 16);
+        b = parseInt(hex[3] + hex[3], 16);
+      }
+      // 6 digits
+      else if (hex.length === 7) {
+        r = parseInt(hex[1] + hex[2], 16);
+        g = parseInt(hex[3] + hex[4], 16);
+        b = parseInt(hex[5] + hex[6], 16);
+      }
+
+      return { r: r, g: g, b: b };
+    }
+
+    // Function to convert RGB to HSL
+    function rgbToHsl(r, g, b) {
+      r /= 255;
+      g /= 255;
+      b /= 255;
+
+      let max = Math.max(r, g, b),
+          min = Math.min(r, g, b);
+      let h, s, l = (max + min) / 2;
+
+      if (max === min) {
+        h = s = 0; // achromatic
+      } else {
+        let d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+          case r:
+            h = (g - b) / d + (g < b ? 6 : 0);
+            break;
+          case g:
+            h = (b - r) / d + 2;
+            break;
+          case b:
+            h = (r - g) / d + 4;
+            break;
+        }
+        h /= 6;
+      }
+
+      return {
+        h: h * 360,
+        s: s * 100,
+        l: l * 100
+      };
+    }
+
+    // Function to convert HSL to RGB
+    function hslToRgb(h, s, l) {
+      s /= 100;
+      l /= 100;
+
+      let c = (1 - Math.abs(2 * l - 1)) * s;
+      let x = c * (1 - Math.abs((h / 60) % 2 - 1));
+      let m = l - c / 2;
+
+      let r, g, b;
+      if (0 <= h && h < 60) {
+        r = c;
+        g = x;
+        b = 0;
+      } else if (60 <= h && h < 120) {
+        r = x;
+        g = c;
+        b = 0;
+      } else if (120 <= h && h < 180) {
+        r = 0;
+        g = c;
+        b = x;
+      } else if (180 <= h && h < 240) {
+        r = 0;
+        g = x;
+        b = c;
+      } else if (240 <= h && h < 300) {
+        r = x;
+        g = 0;
+        b = c;
+      } else {
+        r = c;
+        g = 0;
+        b = x;
+      }
+
+      r = Math.round((r + m) * 255);
+      g = Math.round((g + m) * 255);
+      b = Math.round((b + m) * 255);
+
+      return { r: r, g: g, b: b };
+    }
+
+    document.getElementById('fileInput').addEventListener('change', function(event) {
+      const file = event.target.files[0];
+
+      if (file && file.type === "image/svg+xml") {
+        const reader = new FileReader();
+
+        reader.onload = function(e) {
+          // Inject the SVG into the container
+          const svgContainer = document.getElementById('svgContainer');
+          svgContainer.innerHTML = e.target.result;  // Inject the SVG markup
+
+          // Enable the "Copy SVG to Clipboard" button
+          document.getElementById('copyButton').disabled = false;
+
+          // Get the loaded SVG element
+          const svgElement = svgContainer.querySelector('svg');
+          
+          if (svgElement) {
+            // Find all the <path> elements within the SVG
+            const paths = svgElement.querySelectorAll('path');
+            const colorInputsContainer = document.getElementById('colorInputsContainer');
+            colorInputsContainer.innerHTML = '';  // Clear previous color inputs
+
+            // Loop through each <path> and create HSL sliders
+            paths.forEach((path, index) => {
+              const fillColor = path.getAttribute('fill') || '#000000'; // Default to black if no fill is found
+
+              // Convert hex or RGB to HSL
+              let r, g, b;
+              if (fillColor.startsWith('#')) {
+                // Convert hex to RGB
+                ({ r, g, b } = hexToRgb(fillColor));
+              } else {
+                // If it's in RGB format, parse and use it
+                const match = fillColor.match(/rgb\((\d+), (\d+), (\d+)\)/);
+                if (match) {
+                  r = parseInt(match[1], 10);
+                  g = parseInt(match[2], 10);
+                  b = parseInt(match[3], 10);
+                }
+              }
+
+              const { h, s, l } = rgbToHsl(r, g, b);
+
+              // Create the HSL sliders
+              const container = document.createElement('div');
+              container.classList.add('slider-container');
+
+              // Heading with color circle and sliders
+              const headingContainer = document.createElement('div');
+              headingContainer.classList.add('slider-heading-container');
+
+              // Create the color circle and update it with the path's color
+              const colorCircle = document.createElement('div');
+              colorCircle.classList.add('color-circle');
+              colorCircle.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+
+              const heading = document.createElement('p');
+              heading.classList.add('slider-heading');
+              heading.innerText = `Path ${index + 1}`;
+
+              headingContainer.appendChild(heading);
+              headingContainer.appendChild(colorCircle);
+              
+              // Hue slider
+              const hueSlider = createSlider('h', h, 0, 360, (event) => {
+                const newHsl = { h: event.target.value, s, l };
+                updateColor(path, newHsl, colorCircle);
+              });
+
+              // Saturation slider
+              const saturationSlider = createSlider('s', s, 0, 100, (event) => {
+                const newHsl = { h, s: event.target.value, l };
+                updateColor(path, newHsl, colorCircle);
+              });
+
+              // Lightness slider
+              const lightnessSlider = createSlider('l', l, 0, 100, (event) => {
+                const newHsl = { h, s, l: event.target.value };
+                updateColor(path, newHsl, colorCircle);
+              });
+
+              // Append elements to the container
+              container.appendChild(headingContainer);
+              container.appendChild(hueSlider);
+              container.appendChild(saturationSlider);
+              container.appendChild(lightnessSlider);
+              colorInputsContainer.appendChild(container);
+            });
+          }
+        };
+
+        reader.readAsText(file); // Read the SVG file as text
+      } else {
+        alert("Please select a valid SVG file.");
+      }
+    });
+
+    // Function to create a slider
+    function createSlider(type, value, min, max, changeCallback) {
+      const sliderLabel = document.createElement('label');
+      sliderLabel.innerHTML = `${type.charAt(0).toUpperCase() + type.slice(1)}: `;
+      
+      const slider = document.createElement('input');
+      slider.type = 'range';
+      slider.classList.add('slider');
+      slider.value = value;
+      slider.min = min;
+      slider.max = max;
+      slider.step = 1;
+
+      // Add event listener for slider input change
+      slider.addEventListener('input', changeCallback);
+
+      sliderLabel.appendChild(slider);
+      return sliderLabel;
+    }
+
+    // Function to update the color of the path and color circle
+    function updateColor(path, hsl, colorCircle) {
+      const rgb = hslToRgb(hsl.h, hsl.s, hsl.l);
+      const newColor = `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
+      path.setAttribute('fill', newColor);
+      colorCircle.style.backgroundColor = newColor;
+    }
+
+    // Function to copy the SVG to clipboard
+    document.getElementById('copyButton').addEventListener('click', function() {
+      const svgElement = document.querySelector('svg');
+      if (svgElement) {
+        const svgString = new XMLSerializer().serializeToString(svgElement);
+        navigator.clipboard.writeText(svgString)
+          .then(() => alert('SVG copied to clipboard!'))
+          .catch(err => alert('Failed to copy SVG: ' + err));
+      } else {
+        alert('No SVG to copy!');
+      }
+    });
+  </script>
+
+</body>
+</html>
+
