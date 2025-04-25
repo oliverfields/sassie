@@ -8,6 +8,8 @@ from re import split
 from copy import deepcopy
 from potrace import Bitmap, POTRACE_TURNPOLICY_MINORITY, POTRACE_TURNPOLICY_MAJORITY, POTRACE_TURNPOLICY_BLACK, POTRACE_TURNPOLICY_WHITE
 from base64 import b64encode
+from wand.image import Image as WandImage
+from io import BytesIO
 
 
 # Handle resampling for multiple PIL versions
@@ -37,7 +39,11 @@ class sassie:
                 with open(textbox['font'], "rb") as f:
                     font64 = b64encode(f.read())
                     font_name = 'font1'
-                    svg += '<defs><style>@font-face { font-family: "' + font_name + '"; src: url(data:application/font-truetype;charset=utf-8;base64,' + font64.decode('utf-8') + ') format("truetype"); font-weight: normal; font-style: normal; }</style></defs>'
+                    print('TODO: mime type')
+                    mime_type = 'font-truetype'
+                    mime_type = 'x-font-ttf'
+
+                    svg += '<defs><style type="text/css"><![CDATA[@font-face { font-family: "' + font_name + '"; src: url(data:application/' + mime_type + ';base64,' + font64.decode('utf-8') + ') format("truetype"); font-weight: normal; font-style: normal; }]]></style></defs>'
             except Exception as e:
                 print('Unable to process font: ' + str(e))
                 raise
@@ -362,7 +368,7 @@ class sassie:
 if __name__ == "__main__":
 
     textbox = None
-    p = argparse.ArgumentParser()
+    p = argparse.ArgumentParser(description='reduction of realism for the increase of love', epilog='Example --textbox JSON: { "text": "Two in times\\nof peace", "fill": "red", "stroke": "white", "font-size": 60, "font": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "x": 210, "y": 100}')
 
     p.add_argument('-m', '--mode-filter-size', action='store', type=int, help='Replace the pixel value with the median value of all pixels within the given size')
     p.add_argument('-w', '--width', action='store', type=int, help='SVG width')
@@ -382,17 +388,6 @@ if __name__ == "__main__":
     hex_colors = hex_colors.replace('-', ' ')
     hex_colors = split(' ', hex_colors)
 
-    # Example textbox settings
-    #textbox = {
-    #    'text': 'Two in times\nof peace',
-    #    'fill': 'red',
-    #    'stroke': 'white',
-    #    'font-size': 60,
-    #    'font': '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-    #    'x': 210,
-    #    'y': 100
-    #}
-
     try:
         if a.textbox:
             textbox = eval(a.textbox)
@@ -411,11 +406,23 @@ if __name__ == "__main__":
         print('Image processing failed: ' + str(e))
         exit(1)
 
-    try:
-        with open(f"{a.output}", "w") as fp:
-            fp.write(svg)
-    except Exception as e:
-        print('Unable to save: ' + a.output + ': ' + e)
+    if a.output.endswith('.svg'):
+        try:
+            with open(f"{a.output}", "w") as fp:
+                fp.write(svg)
+        except Exception as e:
+            print(f'Unable to save: {a.output}: ' + e)
+            exit(1)
+    elif a.output.endswith('.png'):
+        try:
+            svg_bytes = BytesIO(svg.encode('utf-8'))
+            with WandImage(file=svg_bytes, format='svg') as png:
+                png.save(filename=f"{a.output}")
+        except Exception as e:
+            print(f'Unable to save: {a.output}: ' + e)
+            exit(1)
+    else:
+        print('Illegal file type, must be .svg or .png')
         exit(1)
 
     exit(0)
