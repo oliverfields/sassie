@@ -23,11 +23,21 @@ class sassie:
     Reduce image colors palette to specified palette and convert to svg
     """
 
-    def traces_to_svg(self, traces, width, height, background_color=None, textbox=None):
+    def traces_to_svg(self, traces, width, height, vb_width=None, vb_height=None, background_color=None, textbox=None):
+        """
+        vb_width/vb_height are the viewBox dimensions (coordinate space of the traced paths).
+        width/height are the rendered output dimensions.
+        Keeping these separate allows scaling without cropping.
+        """
+
+        if vb_width is None:
+            vb_width = width
+        if vb_height is None:
+            vb_height = height
 
         font_name = False
 
-        svg = f'''<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="{width}" height="{height}" viewBox="0 0 {width} {height}">'''
+        svg = f'''<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="{width}" height="{height}" viewBox="0 0 {vb_width} {vb_height}">'''
 
         svg += '<!-- Generated using https://github.com/oliverfields/sassie -->'
 
@@ -138,7 +148,6 @@ class sassie:
                     print(f"Textbox gravity value '{gravity}' unknown, must be either n, ne, e, se, s, sw, w or nw")
                     raise
 
-                #print(f'gravity: {gravity} x: {x} y: {y}')
                 print(f'width: {width} height: {height} text_height: {text_height}')
 
             except:
@@ -175,9 +184,6 @@ class sassie:
                 svg += '</text></g>'
                 line_count += 1
                 line_y = text_y + (line_count * font_size)
-
-        #svg += '<line x1="50%" y1="0" x2="50%" y2="100%" style="stroke:blue;stroke-width:1" />'
-        #svg += '<line x1="0" y1="50%" x2="100%" y2="50%" style="stroke:blue;stroke-width:1" />'
 
         svg += "</svg>"
 
@@ -253,7 +259,7 @@ class sassie:
         try:
             img = Image.open(image_src)
         except Exception as e:
-            raise Exception('Unable to open image: ' + image_src + ': ' + e)
+            raise Exception('Unable to open image: ' + image_src + ': ' + str(e))
 
         if resize:
             if img.width > 1920 or img.height > 1920:
@@ -286,14 +292,14 @@ class sassie:
         try:
             img = ImageOps.grayscale(img)
         except Exception as e:
-            raise Exception('Unable to convert image to grayscale: ' + image_src + ': ' + e)
+            raise Exception('Unable to convert image to grayscale: ' + image_src + ': ' + str(e))
 
 
         # Reduce palette to number of color argument
         try:
             img = img.convert('P', palette=Image.ADAPTIVE, colors=len(hex_colors))
         except Exception as e:
-            raise Exception('Unable to reduce palette: ' + image_src + ': ' + e)
+            raise Exception('Unable to reduce palette: ' + image_src + ': ' + str(e))
 
 
         # Despecle image
@@ -338,18 +344,27 @@ class sassie:
                     turdsize=turd_size,
                     turnpolicy=POTRACE_TURNPOLICY_BLACK,
                     alphamax=1.3334,
-                    #opticurve=1,
-                    #opttolerance=9,
                 )
             })
 
-        if not width:
-            width = img.size[0]
+        # The image's actual pixel dimensions define the SVG coordinate space
+        # (viewBox). The -w/-e arguments control the rendered output size only.
+        img_width = img.size[0]
+        img_height = img.size[1]
 
-        if not height:
-            height = img.size[1]
+        out_width = width if width else img_width
+        out_height = height if height else img_height
 
-        svg = self.traces_to_svg(self, layers_trace, width, height, background_color=self.colors[-1]['hex'], textbox=textbox)
+        svg = self.traces_to_svg(
+            self,
+            layers_trace,
+            out_width,
+            out_height,
+            vb_width=img_width,
+            vb_height=img_height,
+            background_color=self.colors[-1]['hex'],
+            textbox=textbox,
+        )
 
         return svg
 
@@ -411,7 +426,7 @@ if __name__ == "__main__":
             with open(f"{a.output}", "w") as fp:
                 fp.write(svg)
         except Exception as e:
-            print(f'Unable to save: {a.output}: ' + e)
+            print(f'Unable to save: {a.output}: ' + str(e))
             exit(1)
     elif a.output.endswith('.png'):
         try:
@@ -419,11 +434,10 @@ if __name__ == "__main__":
             with WandImage(file=svg_bytes, format='svg') as png:
                 png.save(filename=f"{a.output}")
         except Exception as e:
-            print(f'Unable to save: {a.output}: ' + e)
+            print(f'Unable to save: {a.output}: ' + str(e))
             exit(1)
     else:
         print('Illegal file type, must be .svg or .png')
         exit(1)
 
     exit(0)
-
