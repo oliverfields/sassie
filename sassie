@@ -7,7 +7,6 @@ import argparse
 from re import split
 from copy import deepcopy
 from potrace import Bitmap, POTRACE_TURNPOLICY_MINORITY, POTRACE_TURNPOLICY_MAJORITY, POTRACE_TURNPOLICY_BLACK, POTRACE_TURNPOLICY_WHITE
-from base64 import b64encode
 from wand.image import Image as WandImage
 from io import BytesIO
 
@@ -35,7 +34,7 @@ class sassie:
         if vb_height is None:
             vb_height = height
 
-        font_name = False
+        font_name = None
 
         svg = f'''<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="{width}" height="{height}" viewBox="0 0 {vb_width} {vb_height}">'''
 
@@ -44,25 +43,14 @@ class sassie:
         svg += f'<!-- Arguments: {" ".join(argv[1:])}  -->'
 
         if textbox:
-
-            try:
-                with open(textbox['font'], "rb") as f:
-                    font64 = b64encode(f.read())
-                    font_name = 'font1'
-                    print('TODO: mime type')
-                    mime_type = 'font-truetype'
-                    mime_type = 'x-font-ttf'
-
-                    svg += '<defs><style type="text/css"><![CDATA[@font-face { font-family: "' + font_name + '"; src: url(data:application/' + mime_type + ';base64,' + font64.decode('utf-8') + ') format("truetype"); font-weight: normal; font-style: normal; }]]></style></defs>'
-            except Exception as e:
-                print('Unable to process font: ' + str(e))
-                raise
+            font_name = self.resolve_font(self, textbox.get('font', None))
 
         if background_color:
             svg += f'<rect width="100%" height="100%" fill="#{background_color}" />'
 
-        for trace in traces:
-            svg += self.trace_to_svg_part(self, trace['trace'], trace['hex_color'])
+        # Wrap each layer path in a named group for animation targeting
+        for layer_index, trace in enumerate(traces):
+            svg += self.trace_to_svg_part(self, trace['trace'], trace['hex_color'], layer_index)
 
         if textbox:
             try:
@@ -74,101 +62,108 @@ class sassie:
                 print(str(e))
                 raise
 
-            try:
-                stroke = textbox['stroke'].lstrip('#')
-            except:
-                stroke = f'{self.colors[-1]["hex"]}'
+            lightest = max(self.colors, key=lambda c: c['hls'][1])['hex']
+            darkest  = min(self.colors, key=lambda c: c['hls'][1])['hex']
 
-            try:
-                stroke_width = textbox['stroke-width']
-            except:
-                stroke_width = 1
+            if 'fill' in textbox:
+                val = textbox['fill'].strip()
+                fill = None if val == 'none' else (lightest if val == '' else val.lstrip('#'))
+            else:
+                fill = lightest
 
-            try:
-                fill = textbox['fill'].lstrip('#')
-            except:
-                fill = f'{self.colors[0]["hex"]}'
+            if 'stroke' in textbox:
+                val = textbox['stroke'].strip()
+                stroke = None if val == 'none' else (darkest if val == '' else val.lstrip('#'))
+            else:
+                stroke = darkest
 
-            try:
-                font_size = textbox['font-size']
-            except:
-                font_size = 32
+            stroke_width = textbox.get('stroke-width', 1)
 
-            try:
-                margin = textbox['margin']
-            except:
-                margin = 0
+            # margin in em units (multiples of font-size), converted to px
+            # font-size must be resolved first — use a temp value for the margin calc
+            # then recalculate margin once final font-size is known
+            margin_em = textbox.get('margin', 1.0)
 
-            text_anchor = 'middle'
+            font_size_setting = textbox.get('font-size', 'auto')
+            if font_size_setting == 'auto' or 'font-size' not in textbox:
+                # Auto-fit: find largest font size where the longest line fits the width
+                margin_px = margin_em * 32  # temp estimate
+                max_width = vb_width - 2 * margin_px
+                longest   = max(textbox['text'].split('\n'), key=len)
+                ratio     = textbox.get('font-width-ratio', 0.55)
+                font_size = int(max_width / max(len(longest), 1) / ratio)
+                font_size = max(12, min(font_size, 400))
+            else:
+                font_size = int(font_size_setting)
+
+            margin = margin_em * font_size
+
+            text_anchor  = 'middle'
             text_baseline = 'middle'
-            text_height = text_line_count * font_size
+            text_height  = text_line_count * font_size
 
-            try:
-                gravity = textbox['gravity']
+            # x/y defaults — gravity may override, explicit x/y overrides gravity
+            # Uses vb_width/vb_height (viewBox/coordinate space), not output dimensions
+            x = int(vb_width / 2)
+            y = int(vb_height / 2)
 
-
-                if gravity == 'n':
-                    y = font_size + margin
+            gravity = textbox.get('gravity', None)
+            if gravity:
+                if gravity == 'c':
+                    x = int(vb_width / 2)
+                    y = int(vb_height / 2) - int(text_height / 2) + int(font_size / 2)
+                    text_anchor  = 'middle'
+                    text_baseline = 'middle'
+                elif gravity == 'n':
+                    x = int(vb_width / 2)
+                    y = int(margin + font_size)
+                    text_anchor  = 'middle'
                     text_baseline = 'ideographic'
                 elif gravity == 'ne':
-                    y = font_size + margin
-                    text_anchor = 'end'
+                    x = int(vb_width - margin)
+                    y = int(margin + font_size)
+                    text_anchor  = 'end'
                     text_baseline = 'ideographic'
-                    x = width - margin
                 elif gravity == 'e':
-                    text_anchor = 'end'
+                    x = int(vb_width - margin)
+                    y = int(vb_height / 2) - int(text_height / 2) + int(font_size / 2)
+                    text_anchor  = 'end'
                     text_baseline = 'middle'
-                    x = width - margin
-                    y = int(height / 2) - int(text_height / 2) + int(font_size / 2)
                 elif gravity == 'se':
-                    text_anchor = 'end'
+                    x = int(vb_width - margin)
+                    y = int(vb_height - text_height - margin + font_size)
+                    text_anchor  = 'end'
                     text_baseline = 'after-edge'
-                    x = width - margin
-                    y = height - (text_height + margin) + font_size
                 elif gravity == 's':
-                    text_anchor = 'middle'
+                    x = int(vb_width / 2)
+                    y = int(vb_height - text_height - margin + font_size)
+                    text_anchor  = 'middle'
                     text_baseline = 'after-edge'
-                    y = height - (text_height + margin) + font_size
                 elif gravity == 'sw':
-                    text_anchor = 'start'
+                    x = int(margin)
+                    y = int(vb_height - text_height - margin + font_size)
+                    text_anchor  = 'start'
                     text_baseline = 'after-edge'
-                    x = margin
-                    y = height - (text_height + margin) + font_size
                 elif gravity == 'w':
-                    text_anchor = 'start'
+                    x = int(margin)
+                    y = int(vb_height / 2) - int(text_height / 2) + int(font_size / 2)
+                    text_anchor  = 'start'
                     text_baseline = 'middle'
-                    x = margin
-                    y = int(height / 2) - int(text_height / 2) + int(font_size / 2)
                 elif gravity == 'nw':
-                    y = font_size + margin
-                    text_anchor = 'start'
+                    x = int(margin)
+                    y = int(margin + font_size)
+                    text_anchor  = 'start'
                     text_baseline = 'ideographic'
-                    x = margin
                 else:
-                    print(f"Textbox gravity value '{gravity}' unknown, must be either n, ne, e, se, s, sw, w or nw")
-                    raise
+                    print(f"Textbox gravity '{gravity}' unknown, must be c, n, ne, e, se, s, sw, w or nw")
 
-                print(f'width: {width} height: {height} text_height: {text_height}')
-
-            except:
-                pass
-
-            try:
+            # Explicit x/y always win over gravity
+            if 'x' in textbox:
                 x = textbox['x']
-            except:
-                if 'x' not in vars():
-                    x = int(width / 2)
-
-            try:
+            if 'y' in textbox:
                 y = textbox['y']
-            except:
-                if 'y' not in vars():
-                    y = int(height / 2)
 
-            if font_name:
-                font_family = f' font-family="{font_name}"'
-            else:
-                font_family = ''
+            font_family = f' font-family="{font_name}"' if font_name else ''
 
             if len(text) > 1:
                 text_baseline = 'hanging'
@@ -176,21 +171,30 @@ class sassie:
             else:
                 text_y = y
 
+            # Wrap all text lines in a single named group for animate.py targeting
+            fill_attr   = f' fill="#{fill}"'     if fill   else ' fill="none"'
+            stroke_attr = f' stroke="#{stroke}" stroke-width="{stroke_width}"' if stroke else ''
+            svg += '<g id="text-0">'
             line_count = 0
             line_y = text_y
             for t in text:
-                svg += f'<g stroke="#{stroke}" fill="#{fill}" stroke-width="{stroke_width}"><text font-size="{font_size}"{font_family} x="{x}" y="{line_y}" dominant-baseline="{text_baseline}" text-anchor="{text_anchor}">'
-                svg += t
-                svg += '</text></g>'
+                svg += (
+                    f'<g{fill_attr}{stroke_attr}>'
+                    f'<text font-size="{font_size}"{font_family} x="{x}" y="{line_y}" '
+                    f'dominant-baseline="{text_baseline}" text-anchor="{text_anchor}">'
+                    f'{t}</text></g>'
+                )
                 line_count += 1
                 line_y = text_y + (line_count * font_size)
+            svg += '</g>'
+
 
         svg += "</svg>"
 
         return svg
 
 
-    def trace_to_svg_part(self, trace, fill_color):
+    def trace_to_svg_part(self, trace, fill_color, layer_index=None):
         parts = []
         for curve in trace:
             fs = curve.start_point
@@ -207,7 +211,49 @@ class sassie:
                     parts.append(f"C{a.x},{a.y} {b.x},{b.y} {c.x},{c.y}")
             parts.append("z")
 
-        return f'<path stroke="none" fill="#{fill_color}" fill-rule="evenodd" d="{"".join(parts)}"/>'
+        path = f'<path stroke="none" fill="#{fill_color}" fill-rule="evenodd" d="{"".join(parts)}"/>'
+
+        if layer_index is not None:
+            return f'<g id="layer-{layer_index}" data-color="#{fill_color}">{path}</g>'
+        else:
+            return path
+
+
+    def resolve_font(self, font):
+        """
+        Accept a font name ("Times New Roman") or a file path ("/path/to/font.ttf").
+        Returns a font-family string suitable for SVG, or None if nothing was provided.
+        For a font name, uses fc-match to verify it exists on the system.
+        For a file path, checks the file exists.
+        """
+        import subprocess, os
+
+        if not font:
+            return None
+
+        # Looks like a file path
+        if os.sep in font or font.endswith(('.ttf', '.otf', '.TTF', '.OTF')):
+            if os.path.isfile(font):
+                return font
+            else:
+                print(f'Font file not found: {font}')
+                return None
+
+        # Treat as a font name — use fc-match to verify it exists on the system
+        try:
+            result = subprocess.run(
+                ['fc-match', font, '--format=%{family}'],
+                capture_output=True, text=True
+            )
+            matched = result.stdout.strip()
+            if matched:
+                return font  # pass name through; cairosvg resolves via fontconfig
+            else:
+                print(f'Font not found: {font}')
+                return None
+        except FileNotFoundError:
+            # fc-match not available (non-Linux), pass name and hope for the best
+            return font
 
 
     def filter_by_color(self, color, image):
@@ -391,7 +437,7 @@ if __name__ == "__main__":
     p.add_argument('-d', '--turd-size', action='store', type=int, help='Despeckle the bitmap to be traced, by removing all curves whose enclosed area is below the given threshold', default=0)
     p.add_argument('-p', '--hex-palette', action='store', type=str, help='Hex color codes separated by space or dash', required=True)
     p.add_argument('-o', '--output', action='store', type=str, help='Output file path', required=True)
-    p.add_argument('-f', '--font', action='store', type=str, help='Embed truetype(ttf) font')
+    p.add_argument('-f', '--font', action='store', type=str, help='Font name ("Times New Roman") or path to a TTF/OTF file')
     p.add_argument('-t', '--textbox', action='store', type=str, help='text box settings (JSON)', default=None)
     p.add_argument('-s', '--sort-palette', action='store_true', help='Sort palette dark to light')
     p.add_argument('-n', '--no-resize', action='store_true', help='Disable resizing of large images')
