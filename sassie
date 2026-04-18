@@ -54,7 +54,7 @@ class sassie:
 
         if textbox:
             try:
-                text = textbox['text'].split('\n')
+                text = textbox['text'].replace('\\n', '\n').split('\n')
                 text_line_count = len(text)
             except Exception as e:
                 text = []
